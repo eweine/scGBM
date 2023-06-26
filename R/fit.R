@@ -258,6 +258,7 @@ gbm.proj.parallel <- function(Y,M,subsample=2000,min.counts=5,
   U <- matrix(0, nrow=I,ncol=M)
   U[ixs,] <- out$U
   out$U <- U
+  out$V <- out$V %*% diag(1/out$D)
   return(out)
 }
 
