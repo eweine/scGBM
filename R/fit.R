@@ -131,18 +131,18 @@ gbm.sc <- function(Y,
       X <- Xt
       lr <- lr/2
       i <- i - 1
-      next
+      #next
     }
     if(i >= 3) {
       tau <- abs((LL[i]-LL[i-2])/LL[i])
-      if(tau < tol & lr <= 1.06 & i >= min.iter) {
-        break
-      }
+      # if(tau < tol & lr <= 1.06 & i >= min.iter) {
+      #  break
+      # }
 
       if(LL[i] <= (LL[i-1]+0.1)) {
         lr <- max(lr/2, 1)
         X <- Xt
-        next
+        #next
       } else {
         lr <- lr*(1.05)
         #lr <- lr
