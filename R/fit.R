@@ -9,6 +9,7 @@
 #' @param Y A matrix of UMI counts with genes on rows and cells on columns.
 #' @param M The number of latent factors to estimate
 #' @param max.iter The maximum number of iterations
+#' @param max_seconds_run Maximum number of seconds allowed to fit model.
 #' @param tol The tolerance for convergence (relative difference in objective function)
 #' @param subset If NULL, use the entire data to fit the model. If an integer, take a
 #' random subsample of cells to fit the loadings. Then project the remaining
@@ -41,6 +42,7 @@
 gbm.sc <- function(Y,
                    M,
                    max.iter=100,
+                   max_seconds_run = 10 * 3600,
                    tol=10^{-4},
                    subset=NULL,
                    ncores=1,
@@ -75,6 +77,8 @@ gbm.sc <- function(Y,
   #Precompute relevant quantities
   max.Y <- max(Y)
   nz <- which(Y != 0)
+
+  full_model_start_time <- Sys.time()
 
   #Starting estimate for alpha and W
   betas <- log(colSums(Y))
@@ -168,6 +172,21 @@ gbm.sc <- function(Y,
       warning("Maximum number of iterations reached (increase max.iter).
               Possible non-convergence.")
     }
+
+    end_iter_time <- Sys.time()
+    time_since_model_start <- as.numeric(difftime(end_iter_time, full_model_start_time, units = "secs"))
+
+
+    if (time_since_model_start >= max_seconds_run) {
+
+      warning(
+        sprintf("Algorithm reached maximum time without convergence.")
+      )
+      break
+
+    }
+
+
   }
 
   out <- list()

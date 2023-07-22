@@ -9,7 +9,10 @@ gbm.sc(
   Y,
   M,
   max.iter = 100,
-  tol = 10^{     -4 },
+  max_seconds_run = 10 * 3600,
+  tol = 10^{
+     -4
+ },
   subset = NULL,
   ncores = 1,
   infer.beta = FALSE,
@@ -26,6 +29,8 @@ gbm.sc(
 \item{M}{The number of latent factors to estimate}
 
 \item{max.iter}{The maximum number of iterations}
+
+\item{max_seconds_run}{Maximum number of seconds allowed to fit model.}
 
 \item{tol}{The tolerance for convergence (relative difference in objective function)}
 
