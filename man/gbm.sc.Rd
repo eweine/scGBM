@@ -8,6 +8,9 @@ RNA-seq with generalized bilinear models}
 gbm.sc(
   Y,
   M,
+  init_U = NULL,
+  init_V = NULL,
+  init_d = NULL,
   max.iter = 100,
   max_seconds_run = 10 * 3600,
   tol = 10^{
@@ -27,6 +30,12 @@ gbm.sc(
 \item{Y}{A matrix of UMI counts with genes on rows and cells on columns.}
 
 \item{M}{The number of latent factors to estimate}
+
+\item{init_U}{Initialization for U}
+
+\item{init_V}{Initialization for V}
+
+\item{init_d}{Initialization for d}
 
 \item{max.iter}{The maximum number of iterations}
 

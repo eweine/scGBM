@@ -8,6 +8,9 @@
 #'
 #' @param Y A matrix of UMI counts with genes on rows and cells on columns.
 #' @param M The number of latent factors to estimate
+#' @param init_U Initialization for U
+#' @param init_V Initialization for V
+#' @param init_d Initialization for d
 #' @param max.iter The maximum number of iterations
 #' @param max_seconds_run Maximum number of seconds allowed to fit model.
 #' @param tol The tolerance for convergence (relative difference in objective function)
@@ -41,6 +44,9 @@
 #' @author Phillip B. Nicol <philnicol740@gmail.com>
 gbm.sc <- function(Y,
                    M,
+                   init_U = NULL,
+                   init_V = NULL,
+                   init_d = NULL,
                    max.iter=100,
                    max_seconds_run = 10 * 3600,
                    tol=10^{-4},
@@ -93,15 +99,25 @@ gbm.sc <- function(Y,
   })
   betas <- betas + mean(alphas)
   alphas <- alphas - mean(alphas)
-  W <- exp(sweep(alphas[,batch], 2, betas, "+"))
 
-  #Starting estimate of X
-  Z <- (Y-W)/sqrt(W)
-  c <- sqrt(2*log(I*J/0.025))
-  #Z[Z > c] <- c
-  #Z[Z < -c] <- -c
-  LRA <-  irlba::irlba(Z,nv=M,nu=M)
-  X <- LRA$u %*%(LRA$d*t(LRA$v))
+  if (is.null(init_U) || is.null(init_V) || is.null(init_d)) {
+
+    W <- exp(sweep(alphas[,batch], 2, betas, "+"))
+
+    #Starting estimate of X
+    Z <- (Y-W)/sqrt(W)
+    c <- sqrt(2*log(I*J/0.025))
+    #Z[Z > c] <- c
+    #Z[Z < -c] <- -c
+    LRA <-  irlba::irlba(Z,nv=M,nu=M)
+    X <- LRA$u %*%(LRA$d*t(LRA$v))
+
+  } else {
+
+    X <- init_U %*%(init_d*t(init_V))
+
+  }
+
   X <- sqrt(1/W)*X
 
   X[X > 8] <- 8
@@ -208,6 +224,64 @@ gbm.sc <- function(Y,
     out$time <- cumsum(time)
   out <- process.results(out)
   return(out)
+}
+
+#' Initialize scGBM fit with PCA on Rank-2 Approximation
+#'
+#' @param Y data
+#' @param M rank of approximation
+#' @param batch batch for each variable
+#'
+#' @return fit
+#' @export
+#'
+gbm.init <- function(Y, M, batch=as.factor(rep(1,ncol(Y)))) {
+
+  I <- nrow(Y); J <- ncol(Y)
+
+  if(!is.factor(batch)) {
+    stop("Batch must be encoded as factor.")
+  }
+  batch.factor <- batch
+  batch <- as.integer(batch)
+  nbatch <- max(batch)
+
+  #Precompute relevant quantities
+  max.Y <- max(Y)
+  nz <- which(Y != 0)
+
+  full_model_start_time <- Sys.time()
+
+  #Starting estimate for alpha and W
+  betas <- log(colSums(Y))
+  #betas <- betas - mean(betas) Enforce the betas sum to 0
+  W <- matrix(0, nrow=I, ncol=J)
+  log.rsy <- matrix(0,nrow=nbatch,ncol=I)
+  for(j in 1:nbatch) {
+    log.rsy[j,] <- log(rowSums(Y[,batch==j]))
+  }
+  alphas <- vapply(1:nbatch, FUN.VALUE=numeric(I), function(j) {
+    log.rsy[j,]-log(sum(exp(betas[batch==j])))
+  })
+  betas <- betas + mean(alphas)
+  alphas <- alphas - mean(alphas)
+  W <- exp(sweep(alphas[,batch], 2, betas, "+"))
+
+  #Starting estimate of X
+  Z <- (Y-W)/sqrt(W)
+  c <- sqrt(2*log(I*J/0.025))
+  #Z[Z > c] <- c
+  #Z[Z < -c] <- -c
+  LRA <-  irlba::irlba(Z,nv=M,nu=M)
+
+  out <- list()
+
+  out$V <- LRA$v; rownames(out$V) <- colnames(Y); colnames(out$V) <- 1:M
+  out$D <- LRA$d; names(out$D) <- 1:M
+  out$U <- LRA$u; rownames(out$U) <- rownames(Y); colnames(out$U) <- 1:M
+
+  return(out)
+
 }
 
 gbm.proj.parallel <- function(Y,M,subsample=2000,min.counts=5,
