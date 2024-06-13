@@ -1,3 +1,17 @@
+null_or_val <- function(x) {
+
+  if (is.null(x)) {
+
+    return(0)
+
+  } else {
+
+    return(x)
+
+  }
+
+}
+
 #' @export
 #'
 #' @title scGBM: Model-based dimensionality reduction for single-cell
@@ -44,6 +58,8 @@
 #' @author Phillip B. Nicol <philnicol740@gmail.com>
 gbm.sc <- function(Y,
                    M,
+                   current_iter = NULL,
+                   LL = NULL,
                    init_U = NULL,
                    init_V = NULL,
                    init_d = NULL,
@@ -66,7 +82,12 @@ gbm.sc <- function(Y,
 
 
   I <- nrow(Y); J <- ncol(Y)
-  LL <- rep(0,max.iter)
+  if (is.null(LL)) {
+
+    LL <- rep(0,max.iter)
+
+  }
+
   loglik <- c()
   if(time.by.iter) {
     time <- c()
@@ -146,20 +167,23 @@ gbm.sc <- function(Y,
     #Z <- X+(Y-W)/W
 
     ## Compute log likelihood (no normalizing constant)
-    LL[i] <- sum(Y[nz]*log(W[nz]))-sum(W)
+    LL_i_1 <- tail(LL, 1)
+    LLi <- sum(Y[nz]*log(W[nz]))-sum(W)
+    LL <- c(LL, LLi)
     if(is.na(LL[i]) | is.infinite(LL[i])) {
       X <- Xt
       lr <- lr/2
       i <- i - 1
+      LL <- LL[1:(length(LL) - 1)]
       #next
     }
-    if(i >= 3) {
-      tau <- abs((LL[i]-LL[i-2])/LL[i])
+    if(i >= 3 || (!is.null(current_iter) & null_or_val(current_iter) >= 3)) {
+      #tau <- abs((LL[i]-LL[i-2])/LL[i])
       # if(tau < tol & lr <= 1.06 & i >= min.iter) {
       #  break
       # }
 
-      if(LL[i] <= (LL[i-1]+0.1)) {
+      if(LLi <= (LL_i_1+0.1)) {
         lr <- max(lr/2, 1)
         X <- Xt
         #next
@@ -169,8 +193,8 @@ gbm.sc <- function(Y,
       }
     }
 
-    loglik <- c(loglik,LL[i])
-    cat("Iteration: ", i, ". Objective=", LL[i], "\n")
+    loglik <- c(loglik,LLi)
+    cat("Iteration: ", i, ". Objective=", LLi, "\n")
     if(time.by.iter) {
       time <- c(time,difftime(Sys.time(),start.time,units="sec"))
       start.time <- Sys.time()
@@ -223,6 +247,8 @@ gbm.sc <- function(Y,
   if(time.by.iter)
     out$time <- cumsum(time)
   out <- process.results(out)
+  out$LL <- LL
+  out$lr <- lr
   return(out)
 }
 
