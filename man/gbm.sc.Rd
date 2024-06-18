@@ -8,6 +8,8 @@ RNA-seq with generalized bilinear models}
 gbm.sc(
   Y,
   M,
+  cluster = FALSE,
+  celltype = NULL,
   current_iter = NULL,
   LL = NULL,
   init_U = NULL,

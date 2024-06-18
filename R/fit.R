@@ -58,6 +58,8 @@ null_or_val <- function(x) {
 #' @author Phillip B. Nicol <philnicol740@gmail.com>
 gbm.sc <- function(Y,
                    M,
+                   cluster = FALSE,
+                   celltype = NULL,
                    current_iter = NULL,
                    LL = NULL,
                    init_U = NULL,
@@ -91,7 +93,6 @@ gbm.sc <- function(Y,
   loglik <- c()
   if(time.by.iter) {
     time <- c()
-    start.time <- Sys.time()
   }
 
   if(!is.factor(batch)) {
@@ -105,8 +106,9 @@ gbm.sc <- function(Y,
   max.Y <- max(Y)
   nz <- which(Y != 0)
 
-  full_model_start_time <- Sys.time()
+  total_model_time <- 0
 
+  init_start_time <- Sys.time()
   #Starting estimate for alpha and W
   betas <- log(colSums(Y))
   #betas <- betas - mean(betas) Enforce the betas sum to 0
@@ -147,7 +149,36 @@ gbm.sc <- function(Y,
   #For acceleration, save previous X
   Xt <- matrix(0,nrow=I,ncol=J)
 
+  init_end_time <- Sys.time()
+  total_model_time <- total_model_time + as.numeric(
+    difftime(
+      init_end_time, init_start_time, units = "secs"
+    )
+  )
+
+  nmi_vec <- numeric(max.iter)
+  ari_vec <- numeric(max.iter)
+
   for(i in 1:max.iter) {
+
+    if (cluster) {
+
+      print("clustering...")
+      d <- distances::distances(LRA$v %*% diag(LRA$d))
+      dm <- distances::distance_matrix(d)
+      clust_tree <- fastcluster::hclust(dm, method="ward.D2")
+      clusts <- cutree(clust_tree, k = 10)
+      nmi <- aricode::NMI(celltype, clusts)
+      ari <- aricode::ARI(celltype, clusts)
+      nmi_vec[i] <- nmi
+      ari_vec[i] <- ari
+      print(nmi)
+      print(ari)
+
+    }
+
+    iter_start_time <- Sys.time()
+
     #Reweight
     alphas <- vapply(1:nbatch, FUN.VALUE=numeric(I), function(j) {
       #sweep(X[,batch==j],2,betas[batch==j],"+")
@@ -195,10 +226,6 @@ gbm.sc <- function(Y,
 
     loglik <- c(loglik,LLi)
     cat("Iteration: ", i, ". Objective=", LLi, "\n")
-    if(time.by.iter) {
-      time <- c(time,difftime(Sys.time(),start.time,units="sec"))
-      start.time <- Sys.time()
-    }
 
     ## Gradient Step
     V <- X+((i-1)/(i+2))*(X-Xt)
@@ -214,10 +241,19 @@ gbm.sc <- function(Y,
     }
 
     end_iter_time <- Sys.time()
-    time_since_model_start <- as.numeric(difftime(end_iter_time, full_model_start_time, units = "secs"))
+    iter_time <- as.numeric(
+      difftime(
+        end_iter_time, iter_start_time, units = "secs"
+        )
+      )
 
+    if(time.by.iter) {
+      time <- c(time,iter_time)
+    }
 
-    if (time_since_model_start >= max_seconds_run) {
+    total_model_time <- total_model_time + iter_time
+
+    if (total_model_time >= max_seconds_run) {
 
       warning(
         sprintf("Algorithm reached maximum time without convergence.")
@@ -249,6 +285,8 @@ gbm.sc <- function(Y,
   out <- process.results(out)
   out$LL <- LL
   out$lr <- lr
+  out$ari <- ari_vec
+  out$nmi <- nmi_vec
   return(out)
 }
 
